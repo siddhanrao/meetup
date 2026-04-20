@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>MeetUp</title>
+<script src="/socket.io/socket.io.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{--bg:#080810;--surface:#10101a;--surface2:#18182a;--surface3:#20203a;--accent:#6c63ff;--accent2:#ff6b9d;--accent3:#00d4aa;--text:#f0f0ff;--muted:#8888aa;--border:rgba(255,255,255,0.06);--shadow:0 8px 32px rgba(0,0,0,0.4);}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;overflow:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 60% at 10% 10%,rgba(108,99,255,0.1) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 90% 90%,rgba(255,107,157,0.08) 0%,transparent 60%);pointer-events:none;z-index:0;}
+#lobby{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:1.5rem;gap:1.5rem;overflow-y:auto;}
+.logo-text{font-size:2.2rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;}
+.logo-sub{font-size:0.75rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-top:0.3rem;text-align:center;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1.5rem;width:100%;max-width:400px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:1rem;}
+.card h2{font-size:1.1rem;font-weight:600;}
+.card p{font-size:0.82rem;color:var(--muted);line-height:1.6;}
+.btn{display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.85rem 1.2rem;border-radius:14px;border:none;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:600;cursor:pointer;transition:all 0.15s;width:100%;}
+.btn:active{transform:scale(0.97);}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#8b7fff);color:#fff;box-shadow:0 4px 20px rgba(108,99,255,0.3);}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-wa{background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;}
+.btn-em{background:linear-gradient(135deg,#4285f4,#1a73e8);color:#fff;}
+.share-row{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;}
+input{background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Inter',sans-serif;font-size:1rem;padding:0.75rem 1rem;outline:none;width:100%;transition:border-color 0.2s;}
+input:focus{border-color:var(--accent);}
+input::placeholder{color:var(--muted);}
+.irow{display:flex;gap:0.6rem;}
+.irow input{flex:1;}
+.irow .btn{width:auto;padding:0.75rem 1rem;flex-shrink:0;}
+.divider{display:flex;align-items:center;gap:1rem;color:var(--muted);font-size:0.72rem;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+.code-box{background:rgba(108,99,255,0.08);border:1.5px dashed rgba(108,99,255,0.3);border-radius:16px;padding:1.2rem;text-align:center;}
+.code-num{font-size:2.8rem;font-weight:700;letter-spacing:0.12em;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.code-hint{font-size:0.73rem;color:var(--muted);margin-top:0.3rem;}
+#lobby-status{font-size:0.8rem;color:var(--muted);text-align:center;min-height:1rem;}
+#lobby-status.err{color:#ff6b6b;}
+#name-modal{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);z-index:300;display:none;align-items:flex-end;justify-content:center;padding:1rem;}
+#name-modal.show{display:flex;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:24px 24px 20px 20px;padding:1.8rem;width:100%;max-width:420px;display:flex;flex-direction:column;gap:1rem;box-shadow:var(--shadow);}
+.modal-box h2{font-size:1.15rem;font-weight:600;}
+#room{display:none;position:fixed;inset:0;flex-direction:column;background:var(--bg);z-index:1;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 1rem;border-bottom:1px solid var(--border);background:rgba(8,8,16,0.9);backdrop-filter:blur(16px);flex-shrink:0;}
+.topbar-brand{font-weight:700;font-size:0.95rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.topbar-code{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0.3rem 0.7rem;font-size:0.72rem;color:var(--muted);}
+.topbar-code strong{color:var(--accent);font-size:0.85rem;letter-spacing:0.08em;}
+.topbar-right{display:flex;align-items:center;gap:0.6rem;}
+.conn-status{display:flex;align-items:center;gap:0.4rem;font-size:0.72rem;color:var(--muted);}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+.dot.on{background:var(--accent3);box-shadow:0 0 6px var(--accent3);}
+.dot.wait{background:#facc15;animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.host-badge{background:linear-gradient(135deg,#f59e0b,#f97316);color:#fff;font-size:0.6rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:5px;text-transform:uppercase;}
+.main-area{flex:1;display:flex;overflow:hidden;min-height:0;position:relative;}
+.video-section{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+.grid{flex:1;display:grid;gap:0.6rem;padding:0.6rem;overflow:hidden;align-content:center;}
+.grid.p1{grid-template-columns:1fr;}
+.grid.p2{grid-template-columns:1fr 1fr;}
+.grid.p3,.grid.p4{grid-template-columns:1fr 1fr;}
+.grid.p5,.grid.p6{grid-template-columns:1fr 1fr 1fr;}
+.tile{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:4/3;}
+.tile.host-tile{border-color:rgba(245,158,11,0.4);}
+.tile.hand-raised{border-color:#facc15;box-shadow:0 0 12px rgba(250,204,21,0.3);}
+.tile video{width:100%;height:100%;object-fit:cover;}
+.tile-local video{transform:scaleX(-1);}
+.tile-label{position:absolute;bottom:0.5rem;left:0.5rem;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);border-radius:6px;padding:0.18rem 0.5rem;font-size:0.68rem;font-weight:600;color:#fff;}
+.tile-pills{position:absolute;top:0.5rem;left:0.5rem;display:flex;gap:0.3rem;}
+.pill{border-radius:5px;padding:0.15rem 0.4rem;font-size:0.62rem;font-weight:600;display:none;}
+.pill.show{display:block;}
+.pill-muted{background:rgba(255,80,80,0.85);color:#fff;}
+.pill-locked{background:rgba(255,50,50,0.95);color:#fff;}
+.hand-indicator{position:absolute;top:0.5rem;right:0.5rem;font-size:1.3rem;animation:handwave 1s ease-in-out infinite;display:none;}
+.hand-indicator.show{display:block;}
+@keyframes handwave{0%,100%{transform:rotate(-10deg);}50%{transform:rotate(10deg);}}
+.tile-reaction{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:3rem;pointer-events:none;animation:reactpop 1.5s ease forwards;display:none;}
+@keyframes reactpop{0%{opacity:0;transform:translate(-50%,-50%) scale(0.5);}20%{opacity:1;transform:translate(-50%,-60%) scale(1.2);}80%{opacity:1;transform:translate(-50%,-80%) scale(1);}100%{opacity:0;transform:translate(-50%,-120%) scale(0.8);}}
+.wait-tile{flex-direction:column;gap:0.6rem;color:var(--muted);}
+.wait-avatar{width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem;}
+.wait-tile p{font-size:0.75rem;}
+
+/* REACTION BAR */
+.reaction-bar{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);display:flex;gap:0.5rem;background:rgba(8,8,16,0.9);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:50px;padding:0.5rem 0.8rem;z-index:50;opacity:0;pointer-events:none;transition:all 0.2s;transform:translateX(-50%) translateY(10px);}
+.reaction-bar.show{opacity:1;pointer-events:all;transform:translateX(-50%) translateY(0);}
+.react-btn{width:38px;height:38px;border-radius:50%;border:none;background:transparent;font-size:1.4rem;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;}
+.react-btn:hover{transform:scale(1.3);background:var(--surface2);}
+.react-btn:active{transform:scale(1.1);}
+
+/* FLOATING REACTIONS */
+.float-reaction{position:fixed;pointer-events:none;font-size:2.5rem;z-index:100;animation:floatup 2.5s ease forwards;}
+@keyframes floatup{0%{opacity:1;transform:translateY(0) scale(1);}100%{opacity:0;transform:translateY(-200px) scale(0.5);}}
+
+/* RAISED HANDS ALERT */
+.hands-alert{position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(250,204,21,0.15);border:1px solid rgba(250,204,21,0.4);border-radius:12px;padding:0.5rem 1rem;font-size:0.78rem;color:#facc15;display:none;z-index:40;white-space:nowrap;}
+.hands-alert.show{display:block;}
+
+/* WHITEBOARD */
+#whiteboard{display:none;position:absolute;inset:0;background:var(--bg);z-index:30;flex-direction:column;}
+#whiteboard.show{display:flex;}
+.wb-toolbar{display:flex;align-items:center;gap:0.5rem;padding:0.6rem 1rem;border-bottom:1px solid var(--border);background:rgba(8,8,16,0.9);flex-shrink:0;flex-wrap:wrap;}
+.wb-title{font-size:0.85rem;font-weight:700;color:var(--accent);margin-right:0.5rem;}
+.wb-btn{padding:0.35rem 0.7rem;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:0.78rem;cursor:pointer;transition:all 0.15s;font-family:'Inter',sans-serif;}
+.wb-btn:hover{background:var(--surface3);}
+.wb-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.wb-colors{display:flex;gap:0.3rem;align-items:center;}
+.wb-color{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:all 0.15s;flex-shrink:0;}
+.wb-color.active{border-color:#fff;transform:scale(1.2);}
+.wb-sizes{display:flex;gap:0.3rem;align-items:center;}
+.wb-size{padding:0.3rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:0.72rem;cursor:pointer;}
+.wb-size.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+#wb-canvas{flex:1;cursor:crosshair;touch-action:none;}
+.wb-close{margin-left:auto;padding:0.35rem 0.8rem;border-radius:8px;border:1px solid rgba(255,80,80,0.4);background:rgba(255,80,80,0.1);color:#ff6b6b;font-size:0.78rem;cursor:pointer;font-family:'Inter',sans-serif;}
+
+/* SIDE PANEL */
+.side-panel{width:0;display:flex;flex-direction:column;background:var(--surface);overflow:hidden;transition:width 0.3s;border-left:1px solid transparent;}
+.side-panel.open{width:290px;border-color:var(--border);}
+.panel-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab{flex:1;padding:0.7rem 0.4rem;font-size:0.75rem;font-weight:600;color:var(--muted);cursor:pointer;text-align:center;border:none;background:none;transition:all 0.2s;border-bottom:2px solid transparent;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.panel-content{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.tab-pane{display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;}
+.tab-pane.active{display:flex;}
+.plist{flex:1;overflow-y:auto;padding:0.75rem;display:flex;flex-direction:column;gap:0.3rem;}
+.plist-item{display:flex;align-items:center;gap:0.6rem;padding:0.55rem 0.5rem;border-radius:10px;transition:background 0.2s;}
+.plist-item:hover{background:var(--surface2);}
+.plist-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;color:#fff;flex-shrink:0;position:relative;}
+.locked-ov{position:absolute;inset:0;border-radius:50%;background:rgba(255,50,50,0.3);display:flex;align-items:center;justify-content:center;font-size:0.65rem;}
+.plist-info{flex:1;min-width:0;}
+.plist-name{font-size:0.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.plist-role{font-size:0.62rem;color:var(--muted);}
+.plist-state{font-size:0.62rem;margin-top:0.1rem;display:flex;gap:0.3rem;}
+.si{opacity:0.4;font-size:0.68rem;}.si.off{color:#ff6b6b;opacity:1;}.si.locked{color:#ff3333;opacity:1;}
+.plist-controls{display:flex;gap:0.2rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:95px;}
+.pctrl{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:0.7rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;position:relative;}
+.pctrl:hover{background:var(--surface3);}
+.pctrl.am{color:#ff6b6b;border-color:rgba(255,80,80,0.5);background:rgba(255,80,80,0.1);}
+.pctrl.al{color:#ff3333;border-color:rgba(255,50,50,0.7);background:rgba(255,50,50,0.2);}
+.pctrl.kk{border-color:rgba(255,80,80,0.3);color:#ff6b6b;}
+.pctrl.kk:hover{background:rgba(255,80,80,0.15);}
+.pctrl-tip{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#111;color:#fff;font-size:0.56rem;padding:0.18rem 0.4rem;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.15s;z-index:10;}
+.pctrl:hover .pctrl-tip{opacity:1;}
+.chat-msgs{flex:1;overflow-y:auto;padding:0.75rem;display:flex;flex-direction:column;gap:0.55rem;}
+.msg{display:flex;flex-direction:column;gap:0.12rem;max-width:90%;}
+.msg.me{align-self:flex-end;}.msg.them{align-self:flex-start;}
+.msg-name{font-size:0.6rem;color:var(--muted);padding:0 0.3rem;}
+.msg.me .msg-name{text-align:right;}
+.bubble{padding:0.5rem 0.75rem;border-radius:12px;font-size:0.8rem;line-height:1.5;word-break:break-word;}
+.msg.me .bubble{background:linear-gradient(135deg,var(--accent),#8b7fff);color:#fff;border-bottom-right-radius:3px;}
+.msg.them .bubble{background:var(--surface2);color:var(--text);border-bottom-left-radius:3px;border:1px solid var(--border);}
+.sys-msg{font-size:0.68rem;color:var(--muted);text-align:center;font-style:italic;}
+.chat-foot{padding:0.65rem;border-top:1px solid var(--border);display:flex;gap:0.4rem;flex-shrink:0;}
+.chat-foot input{flex:1;border-radius:10px;padding:0.6rem 0.8rem;font-size:0.82rem;}
+.send-btn{width:38px;height:38px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),#8b7fff);color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* CONTROLS */
+.controls{display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.8rem 0.5rem;padding-bottom:calc(0.8rem + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:rgba(8,8,16,0.9);backdrop-filter:blur(16px);flex-shrink:0;flex-wrap:wrap;}
+.ctrl{width:46px;height:46px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:1.1rem;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;position:relative;}
+.ctrl:active{transform:scale(0.92);}
+.ctrl.off{background:rgba(255,80,80,0.15);border-color:rgba(255,80,80,0.5);color:#ff6b6b;}
+.ctrl.locked-ctrl{background:rgba(255,50,50,0.2);border-color:rgba(255,50,50,0.7);color:#ff3333;cursor:not-allowed;}
+.ctrl.active{background:rgba(108,99,255,0.2);border-color:rgba(108,99,255,0.5);color:#a09fff;}
+.ctrl.hand-active{background:rgba(250,204,21,0.2);border-color:rgba(250,204,21,0.5);color:#facc15;}
+.ctrl.disabled{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+.ctrl-end{background:linear-gradient(135deg,#ff4f4f,#ff2d55)!important;border-color:transparent!important;color:#fff!important;width:52px!important;height:52px!important;box-shadow:0 4px 16px rgba(255,60,80,0.35)!important;}
+.notif-dot{position:absolute;top:-2px;right:-2px;background:var(--accent2);color:#fff;font-size:0.5rem;font-weight:700;width:14px;height:14px;border-radius:50%;display:none;align-items:center;justify-content:center;border:2px solid var(--bg);}
+#toast{position:fixed;bottom:6rem;left:50%;transform:translateX(-50%) translateY(12px);background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:0.55rem 1.1rem;font-size:0.78rem;color:var(--text);opacity:0;transition:all 0.3s;z-index:200;white-space:nowrap;box-shadow:var(--shadow);max-width:90vw;overflow:hidden;text-overflow:ellipsis;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.lock-label{font-size:0.56rem;background:rgba(255,50,50,0.2);color:#ff6b6b;border:1px solid rgba(255,50,50,0.3);border-radius:4px;padding:0.03rem 0.28rem;}
+@media(max-width:480px){.grid.p2{grid-template-columns:1fr;}.topbar-code{display:none;}.side-panel.open{position:fixed;inset:0;width:100%;z-index:50;border:none;}}
+
+
+
+/* SPEAKING INDICATOR */
+.tile{transition:box-shadow 0.15s ease,border-color 0.15s ease;}
+.tile.speaking{border-color:#6c63ff!important;box-shadow:0 0 0 3px rgba(108,99,255,0.5);}
+
+.org-badge{background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-size:0.6rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:5px;text-transform:uppercase;}
+.tile.org-tile{border-color:rgba(6,182,212,0.4);}
+
+.org-badge{background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-size:0.6rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:5px;text-transform:uppercase;}
+.tile.org-tile{border-color:rgba(6,182,212,0.4);}
+</style>
+</head>
+<body>
+
+<div id="name-modal">
+  <div class="modal-box">
+    <h2>👋 What's your name?</h2>
+    <input id="name-input" placeholder="Enter your name..." maxlength="30" onkeydown="if(event.key==='Enter')confirmName()"/>
+    <button class="btn btn-primary" onclick="confirmName()">Continue &#8594;</button>
+  </div>
+</div>
+
+<div id="lobby">
+  <div><div class="logo-text">MeetUp</div><div class="logo-sub">Instant video meetings</div></div>
+  <div class="card" id="home-card">
+    <div><h2>📹 Start a meeting</h2><p>Create a room — you'll be the host with full controls.</p></div>
+    <button class="btn btn-primary" onclick="createRoom()">Create new room</button>
+    <div class="divider">or join</div>
+    <div class="irow">
+      <input id="ji" placeholder="Enter code e.g. 123-456" maxlength="7" onkeydown="if(event.key==='Enter')joinInput()"/>
+      <button class="btn btn-ghost" onclick="joinInput()">Join</button>
+    </div>
+    <div id="lobby-status"></div>
+  </div>
+  <div class="card" id="code-card" style="display:none">
+    <h2>🎉 Meeting ready!</h2>
+    <div class="code-box">
+      <div style="font-size:0.68rem;color:#8888aa;margin-bottom:0.3rem;letter-spacing:0.1em;text-transform:uppercase;">Meeting Code</div>
+      <div class="code-num" id="display-code">---</div>
+      <div class="code-hint">You will be the host — unlimited participants</div>
+    </div>
+    <button class="btn btn-primary" onclick="startPendingRoom()">📹 Join as Host</button>
+    <div class="share-row">
+      <button class="btn btn-wa" onclick="shareWA()">💬 WhatsApp</button>
+      <button class="btn btn-em" onclick="shareEM()">&#9993; Email</button>
+    </div>
+    <button class="btn btn-ghost" onclick="copyCode()">📋 Copy code</button>
+  </div>
+</div>
+
+<div id="room">
+  <div class="topbar">
+    <div class="topbar-brand">MeetUp</div>
+    <div class="topbar-code">Code: <strong id="rid">-</strong></div>
+    <div id="meeting-timer" style="font-family:monospace;font-size:0.82rem;color:var(--accent3);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0.3rem 0.7rem;display:none;">00:00</div>
+    <div class="topbar-right">
+      <div id="my-role-badge"></div>
+      <div class="conn-status"><div class="dot wait" id="dot"></div><span id="stxt">Waiting...</span></div>
+    </div>
+  </div>
+  <div class="main-area">
+
+    <!-- Whiteboard overlay -->
+    <div id="whiteboard">
+      <div class="wb-toolbar">
+        <span class="wb-title">✏️ Whiteboard</span>
+        <button class="wb-btn active" id="wb-pen" onclick="wbTool('pen')">✒️ Pen</button>
+        <button class="wb-btn" id="wb-eraser" onclick="wbTool('eraser')">⌫ Eraser</button>
+        <div class="wb-colors">
+          <div class="wb-color active" style="background:#fff" onclick="wbColor(this,'#fff')"></div>
+          <div class="wb-color" style="background:#6c63ff" onclick="wbColor(this,'#6c63ff')"></div>
+          <div class="wb-color" style="background:#ff6b9d" onclick="wbColor(this,'#ff6b9d')"></div>
+          <div class="wb-color" style="background:#00d4aa" onclick="wbColor(this,'#00d4aa')"></div>
+          <div class="wb-color" style="background:#facc15" onclick="wbColor(this,'#facc15')"></div>
+          <div class="wb-color" style="background:#f87171" onclick="wbColor(this,'#f87171')"></div>
+          <div class="wb-color" style="background:#60a5fa" onclick="wbColor(this,'#60a5fa')"></div>
+        </div>
+        <div class="wb-sizes">
+          <button class="wb-size" onclick="wbSize(2,this)">S</button>
+          <button class="wb-size active" onclick="wbSize(5,this)">M</button>
+          <button class="wb-size" onclick="wbSize(12,this)">L</button>
+          <button class="wb-size" onclick="wbSize(24,this)">XL</button>
+        </div>
+        <button class="wb-btn" onclick="wbClear()">🗑️ Clear</button>
+        <button class="wb-close" onclick="toggleWhiteboard()">✕ Close</button>
+      </div>
+      <canvas id="wb-canvas"></canvas>
+    </div>
+
+    <!-- Raised hands alert (host only) -->
+    <div class="hands-alert" id="hands-alert"></div>
+
+    <!-- Reaction picker -->
+    <div class="reaction-bar" id="reaction-bar">
+      <button class="react-btn" onclick="sendReaction('👋')">👋</button>
+      <button class="react-btn" onclick="sendReaction('👍')">👍</button>
+      <button class="react-btn" onclick="sendReaction('❤️')">❤️</button>
+      <button class="react-btn" onclick="sendReaction('🎉')">🎉</button>
+      <button class="react-btn" onclick="sendReaction('😄')">😄</button>
+      <button class="react-btn" onclick="sendReaction('👏')">👏</button>
+      <button class="react-btn" onclick="sendReaction('😲')">😲</button>
+      <button class="react-btn" onclick="sendReaction('🌈')">🌈</button>
+    </div>
+
+    <div class="video-section">
+      <div class="grid p1" id="grid"></div>
+      <div class="controls">
+        <button class="ctrl" id="micbtn" onclick="tryToggleMic()">🎤</button>
+        <button class="ctrl" id="cambtn" onclick="tryToggleCam()">📷</button>
+        <button class="ctrl disabled" id="muteallbtn" onclick="muteAll()" title="Mute all">🔇
+        </button>
+        <button class="ctrl disabled" id="screenbtn" onclick="toggleScreen()">💻</button>
+        <button class="ctrl" id="handbtn" onclick="toggleHand()" title="Raise hand">✋</button>
+        <button class="ctrl" id="reactbtn" onclick="toggleReactions()" title="Reactions">😊</button>
+        <button class="ctrl disabled" id="wbbtn" onclick="toggleWhiteboard()" title="Whiteboard">✏️</button>
+        <button class="ctrl" id="sidebtn" onclick="toggleSide()">
+          👥
+          <div class="notif-dot" id="notif-dot">0</div>
+        </button>
+        <button class="ctrl ctrl-end" onclick="endCall()">📵</button>
+      </div>
+    </div>
+
+    <div class="side-panel" id="side-panel">
+      <div class="panel-tabs">
+        <button class="tab active" id="tab-p" onclick="switchTab('p')">👥 People</button>
+        <button class="tab" id="tab-c" onclick="switchTab('c')">💬 Chat</button>
+      </div>
+      <div class="panel-content">
+        <div class="tab-pane active" id="pane-p">
+          <div class="plist" id="plist"></div>
+        </div>
+        <div class="tab-pane" id="pane-c">
+          <div class="chat-msgs" id="chat-msgs"></div>
+          <div class="chat-foot">
+            <input id="chat-in" placeholder="Message..." onkeydown="if(event.key==='Enter')sendChat()"/>
+            <button class="send-btn" onclick="sendChat()">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+function playSound(type){try{const ctx=new AudioCtx(),o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='join'){o.frequency.setValueAtTime(520,ctx.currentTime);o.frequency.setValueAtTime(660,ctx.currentTime+0.1);o.frequency.setValueAtTime(800,ctx.currentTime+0.2);g.gain.setValueAtTime(0.3,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5);o.start();o.stop(ctx.currentTime+0.5);}else if(type==='leave'){o.frequency.setValueAtTime(500,ctx.currentTime);o.frequency.setValueAtTime(350,ctx.currentTime+0.15);g.gain.setValueAtTime(0.25,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start();o.stop(ctx.currentTime+0.4);}else if(type==='chat'){o.type='sine';o.frequency.setValueAtTime(880,ctx.currentTime);g.gain.setValueAtTime(0.12,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.2);o.start();o.stop(ctx.currentTime+0.2);}else if(type==='hand'){o.frequency.setValueAtTime(700,ctx.currentTime);o.frequency.setValueAtTime(900,ctx.currentTime+0.08);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start();o.stop(ctx.currentTime+0.3);}}catch(e){}}
+
+const socket=io();
+let ls=null,rid=null,micOn=true,camOn=true,micLocked=false,camLocked=false;
+let myName='Guest',pendingRoomId=null,amHost=false,amOrganizer=false;
+let peers={},peerInfo={};
+let screenSharing=false,screenStream=null,sideOpen=false,activeTab='p',unreadChat=0;
+let handRaised=false,raisedHands={},reactionsOpen=false;
+const ice={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+const BASE=window.location.origin;
+
+function toast(m,d=2800){const t=document.getElementById('toast');t.innerHTML=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),d);}
+function setstatus(m,e=false){const el=document.getElementById('lobby-status');el.textContent=m;el.className=e?'err':'';}
+function genCode(){return(100+Math.floor(Math.random()*900))+'-'+(100+Math.floor(Math.random()*900));}
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function askName(cb){document.getElementById('name-modal').classList.add('show');setTimeout(()=>document.getElementById('name-input').focus(),100);window._nameCb=cb;}
+function confirmName(){myName=document.getElementById('name-input').value.trim()||'Guest';document.getElementById('name-modal').classList.remove('show');if(window._nameCb)window._nameCb();}
+
+function createRoom(){const code=genCode();document.getElementById('display-code').textContent=code;document.getElementById('home-card').style.display='none';document.getElementById('code-card').style.display='flex';pendingRoomId=code;}
+function copyCode(){navigator.clipboard.writeText(document.getElementById('display-code').textContent).then(()=>toast('📋 Code copied!'));}
+function shareWA(){const code=document.getElementById('display-code').textContent;const msg='Join my MeetUp video call!%0A%0ACode: *'+code+'*%0ALink: '+encodeURIComponent(BASE);window.open('https://wa.me/?text='+msg,'_blank');}
+function shareEM(){const code=document.getElementById('display-code').textContent;const sub='Join my MeetUp video call';const body='Hi,%0A%0AJoin my video call!%0A%0ACode: '+code+'%0ALink: '+BASE+'%0A%0ASteps:%0A1. Open '+BASE+'%0A2. Enter code: '+code+'%0A3. Click Join';window.open('mailto:?subject='+sub+'&body='+body,'_blank');}
+function startPendingRoom(){askName(()=>enterRoom(pendingRoomId));}
+function joinInput(){const v=document.getElementById('ji').value.trim();if(!v){setstatus('Please enter a meeting code',true);return;}askName(()=>enterRoom(v));}
+
+async function enterRoom(id){
+  setstatus('Getting camera and mic...');
+  try{ls=await navigator.mediaDevices.getUserMedia({video:true,audio:true});}
+  catch(e){setstatus('Cannot access camera/mic - allow permissions',true);return;}
+  rid=id;
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('room').style.display='flex';
+  document.getElementById('rid').textContent=rid;
+  addLocalTile();
+  socket.emit('join-room',{roomId:rid,name:myName});
+  startSpeakerDetection();
+}
+
+function broadcastState(){socket.emit('state-update',{micOn,camOn});}
+
+socket.on('your-role',({isHost})=>{
+  amHost=isHost;
+  if(isHost){
+    document.getElementById('my-role-badge').innerHTML='<span class="host-badge">⭐ Host</span>';
+    document.getElementById('screenbtn').classList.remove('disabled');
+    document.getElementById('wbbtn').classList.remove('disabled');
+    document.getElementById('muteallbtn').classList.remove('disabled');
+    toast('⭐ You are the host');
+  } else toast('👋 Joined as participant');
+  updateLocalRole();
+});
+
+// ── TILES ──
+function addLocalTile(){
+  const grid=document.getElementById('grid');
+  const div=document.createElement('div');
+  div.className='tile tile-local';div.id='tile-local';
+  div.innerHTML='<video id="lv" autoplay muted playsinline></video><div class="tile-pills"><span class="pill pill-muted" id="lmic-pill">🔇</span></div><div class="hand-indicator" id="local-hand">✋</div><div class="tile-label">'+esc(myName)+' (You)</div>';
+  grid.prepend(div);
+  document.getElementById('lv').srcObject=ls;
+  updateGrid();
+  addPlistItem('local',myName,false,true,true,true,false,false);
+}
+
+function addRemoteTile(pid,name,isHost,mic,cam,micLk,camLk){
+  peerInfo[pid]={name,isHost,micOn:mic,camOn:cam,micLocked:micLk,camLocked:camLk,handRaised:false};
+  const grid=document.getElementById('grid');
+  const div=document.createElement('div');
+  div.className='tile'+(isHost?' host-tile':'');div.id='tile-'+pid;
+  div.innerHTML='<div class="wait-avatar">👤</div>'
+    +'<div class="tile-pills"><span class="pill pill-muted'+(mic?'':' show')+'" id="mic-pill-'+pid+'">🔇</span></div>'
+    +'<div class="hand-indicator" id="hand-'+pid+'">✋</div>'
+    +'<div class="tile-label">'+(isHost?'[Host] ':(peerInfo[pid]&&peerInfo[pid].isOrganizer?'[Org] ':''))+esc(name)+'</div>';
+  if(isHost)grid.insertBefore(div,grid.children[1]||null);
+  else grid.appendChild(div);
+  updateGrid();
+  addPlistItem(pid,name,isHost,false,mic,cam,micLk,camLk);
+}
+
+function setRemoteVideo(pid,stream,name,isHost){
+  const tile=document.getElementById('tile-'+pid);if(!tile)return;
+  const info=peerInfo[pid]||{micOn:true,camOn:true,micLocked:false,camLocked:false};
+  tile.innerHTML='<video autoplay playsinline></video>'
+    +'<div class="tile-pills"><span class="pill pill-muted'+(info.micOn?'':' show')+'" id="mic-pill-'+pid+'">🔇</span></div>'
+    +'<div class="hand-indicator'+(info.handRaised?' show':'')+'" id="hand-'+pid+'">✋</div>'
+    +'<div class="tile-label">'+(isHost?'[Host] ':'')+esc(name)+'</div>';
+  tile.querySelector('video').srcObject=stream;
+}
+
+function removeTile(pid){const t=document.getElementById('tile-'+pid);if(t)t.remove();removePlistItem(pid);delete peerInfo[pid];updateRaisedHandsAlert();updateGrid();}
+
+function updateGrid(){
+  const grid=document.getElementById('grid');
+  const count=grid.children.length;
+  grid.className='grid p'+Math.min(count,6);
+  if(count>1){document.getElementById('dot').className='dot on';document.getElementById('stxt').textContent=count+' participants';}
+  else{document.getElementById('dot').className='dot wait';document.getElementById('stxt').textContent='Waiting...';}
+}
+
+// ── RAISE HAND ──
+function toggleHand(){
+  handRaised=!handRaised;
+  socket.emit('raise-hand',{roomId:rid,raised:handRaised});
+  document.getElementById('handbtn').classList.toggle('hand-active',handRaised);
+  document.getElementById('local-hand').classList.toggle('show',handRaised);
+  toast(handRaised?'✋ Hand raised':'Hand lowered');
+}
+
+socket.on('hand-raised',({id,name,raised})=>{
+  if(peerInfo[id])peerInfo[id].handRaised=raised;
+  const hi=document.getElementById('hand-'+id);
+  const tile=document.getElementById('tile-'+id);
+  if(hi)hi.classList.toggle('show',raised);
+  if(tile)tile.classList.toggle('hand-raised',raised);
+  if(raised){
+    raisedHands[id]=name;
+    playSound('hand');
+    if(amHost)toast('✋ '+esc(name)+' raised their hand',4000);
+  } else {
+    delete raisedHands[id];
+  }
+  updateRaisedHandsAlert();
+  updatePlistHand(id,raised);
+});
+
+function updateRaisedHandsAlert(){
+  const alert=document.getElementById('hands-alert');
+  const names=Object.values(raisedHands);
+  if(amHost&&names.length>0){
+    alert.textContent='✋ '+names.join(', ')+' raised '+(names.length===1?'their hand':'their hands');
+    alert.classList.add('show');
+  } else {
+    alert.classList.remove('show');
+  }
+}
+
+function updatePlistHand(pid,raised){
+  const el=document.getElementById('pli-'+pid);
+  if(el){const role=el.querySelector('.plist-role');if(role)role.innerHTML=(peerInfo[pid]?.isHost?'[Host] Host':'Participant')+(raised?' ✋':'');}
+}
+
+// ── REACTIONS ──
+function toggleReactions(){
+  reactionsOpen=!reactionsOpen;
+  document.getElementById('reaction-bar').classList.toggle('show',reactionsOpen);
+  document.getElementById('reactbtn').classList.toggle('active',reactionsOpen);
+}
+
+function sendReaction(emoji){
+  socket.emit('reaction',{roomId:rid,emoji,name:myName});
+  showFloatingReaction(emoji,null);
+  showTileReaction('local',emoji);
+  if(reactionsOpen)toggleReactions();
+}
+
+socket.on('reaction',({emoji,name,id})=>{
+  showFloatingReaction(emoji,name);
+  showTileReaction(id,emoji);
+});
+
+function showFloatingReaction(emoji,name){
+  const el=document.createElement('div');
+  el.className='float-reaction';
+  el.textContent=emoji;
+  el.style.left=Math.random()*60+20+'%';
+  el.style.bottom='80px';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2600);
+}
+
+function showTileReaction(pid,emoji){
+  const tile=document.getElementById('tile-'+pid);
+  if(!tile)return;
+  let r=tile.querySelector('.tile-reaction');
+  if(!r){r=document.createElement('div');r.className='tile-reaction';tile.appendChild(r);}
+  r.textContent=emoji;
+  r.style.display='block';
+  r.style.animation='none';
+  void r.offsetWidth;
+  r.style.animation='reactpop 1.5s ease forwards';
+  setTimeout(()=>{r.style.display='none';},1600);
+}
+
+// ── WHITEBOARD ──
+let wbCtx,wbDrawing=false,wbLastX=0,wbLastY=0,wbColor_='#fff',wbSize_=5,wbTool_='pen';
+
+function toggleWhiteboard(){
+  if(!amHost&&!amOrganizer){toast('🚫 Only the host or organizer can use the whiteboard');return;}
+  const wb=document.getElementById('whiteboard');
+  wb.classList.toggle('show');
+  if(wb.classList.contains('show'))initCanvas();
+}
+
+function initCanvas(){
+  const canvas=document.getElementById('wb-canvas');
+  canvas.width=canvas.offsetWidth;
+  canvas.height=canvas.offsetHeight;
+  wbCtx=canvas.getContext('2d');
+  wbCtx.fillStyle='#13131e';
+  wbCtx.fillRect(0,0,canvas.width,canvas.height);
+  canvas.addEventListener('mousedown',wbStart);
+  canvas.addEventListener('mousemove',wbMove);
+  canvas.addEventListener('mouseup',wbEnd);
+  canvas.addEventListener('mouseleave',wbEnd);
+  canvas.addEventListener('touchstart',wbTouchStart,{passive:false});
+  canvas.addEventListener('touchmove',wbTouchMove,{passive:false});
+  canvas.addEventListener('touchend',wbEnd);
+}
+
+function wbStart(e){wbDrawing=true;const r=e.target.getBoundingClientRect();wbLastX=e.clientX-r.left;wbLastY=e.clientY-r.top;}
+function wbMove(e){
+  if(!wbDrawing)return;
+  const r=e.target.getBoundingClientRect();
+  const x=e.clientX-r.left,y=e.clientY-r.top;
+  const isEraser=wbTool_==='eraser';
+  const sz=isEraser?wbSize_*4:wbSize_;
+  wbDraw(wbLastX,wbLastY,x,y,wbColor_,sz,isEraser);
+  socket.emit('wb-draw',{roomId:rid,data:{x0:wbLastX/e.target.width,y0:wbLastY/e.target.height,x1:x/e.target.width,y1:y/e.target.height,color:wbColor_,size:sz,eraser:isEraser}});
+  wbLastX=x;wbLastY=y;
+}
+function wbEnd(){wbDrawing=false;}
+function wbTouchStart(e){e.preventDefault();const t=e.touches[0];const r=e.target.getBoundingClientRect();wbDrawing=true;wbLastX=t.clientX-r.left;wbLastY=t.clientY-r.top;}
+function wbTouchMove(e){e.preventDefault();const t=e.touches[0];const r=e.target.getBoundingClientRect();const x=t.clientX-r.left,y=t.clientY-r.top;const isEraser=wbTool_==='eraser';const sz=isEraser?wbSize_*4:wbSize_;wbDraw(wbLastX,wbLastY,x,y,wbColor_,sz,isEraser);socket.emit('wb-draw',{roomId:rid,data:{x0:wbLastX/e.target.width,y0:wbLastY/e.target.height,x1:x/e.target.width,y1:y/e.target.height,color:wbColor_,size:sz,eraser:isEraser}});wbLastX=x;wbLastY=y;}
+
+function wbDraw(x0,y0,x1,y1,color,size,eraser){
+  if(!wbCtx)return;
+  wbCtx.save();
+  wbCtx.beginPath();
+  wbCtx.moveTo(x0,y0);wbCtx.lineTo(x1,y1);
+  if(eraser){
+    wbCtx.globalCompositeOperation='destination-out';
+    wbCtx.strokeStyle='rgba(0,0,0,1)';
+  } else {
+    wbCtx.globalCompositeOperation='source-over';
+    wbCtx.strokeStyle=color||wbColor_;
+  }
+  wbCtx.lineWidth=size||wbSize_;
+  wbCtx.lineCap='round';wbCtx.lineJoin='round';
+  wbCtx.stroke();
+  wbCtx.restore();
+}
+
+socket.on('wb-draw',({x0,y0,x1,y1,color,size,eraser})=>{
+  const canvas=document.getElementById('wb-canvas');
+  if(!canvas||!wbCtx)return;
+  wbDraw(x0*canvas.width,y0*canvas.height,x1*canvas.width,y1*canvas.height,color,size,eraser);
+});
+
+function wbClear(){
+  if(wbCtx){wbCtx.fillStyle='#13131e';wbCtx.fillRect(0,0,wbCtx.canvas.width,wbCtx.canvas.height);}
+  socket.emit('wb-clear',{roomId:rid});
+}
+socket.on('wb-clear',()=>{
+  const canvas=document.getElementById('wb-canvas');
+  if(!wbCtx&&canvas){wbCtx=canvas.getContext('2d');}
+  if(wbCtx){wbCtx.fillStyle='#13131e';wbCtx.fillRect(0,0,wbCtx.canvas.width,wbCtx.canvas.height);}
+  const wb=document.getElementById('whiteboard');
+  if(!wb.classList.contains('show')){wb.classList.add('show');initCanvas();}
+});
+
+function wbTool(t){
+  wbTool_=t;
+  document.getElementById('wb-pen').classList.toggle('active',t==='pen');
+  document.getElementById('wb-eraser').classList.toggle('active',t==='eraser');
+}
+function wbColor(el,c){
+  wbColor_=c;wbTool_='pen';
+  document.querySelectorAll('.wb-color').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('wb-pen').classList.add('active');
+  document.getElementById('wb-eraser').classList.remove('active');
+}
+function wbSize(s,el){
+  wbSize_=s;
+  document.querySelectorAll('.wb-size').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── PARTICIPANTS LIST ──
+function plistHTML(pid,name,isHost,isMe,mic,cam,micLk,camLk){
+  const initials=name.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase()||'?';
+  let controls='';
+  if(amHost&&!isMe){
+    const isOrg=peerInfo[pid]&&peerInfo[pid].isOrganizer;
+    controls=`<div class="plist-controls">
+      <button class="pctrl${mic?'':' am'}" onclick="hostToggleMic('${pid}')"><span class="pctrl-tip">${mic?'Mute':'Unmute'}</span>${mic?'🎤':'🔇'}</button>
+      <button class="pctrl${micLk?' al':''}" onclick="hostLockMic('${pid}')"><span class="pctrl-tip">${micLk?'Unlock mic':'Lock mic'}</span>${micLk?'🔒':'🔓'}</button>
+      <button class="pctrl${cam?'':' am'}" onclick="hostToggleCam('${pid}')"><span class="pctrl-tip">${cam?'Cam off':'Cam on'}</span>${cam?'📷':'🚫'}</button>
+      <button class="pctrl${camLk?' al':''}" onclick="hostLockCam('${pid}')"><span class="pctrl-tip">${camLk?'Unlock cam':'Lock cam'}</span>${camLk?'🔒':'🔓'}</button>
+      <button class="pctrl${isOrg?' active-lock':''}" onclick="${isOrg?'demoteOrganizer':'promoteOrganizer'}('${pid}')"><span class="pctrl-tip">${isOrg?'Remove organizer':'Make organizer'}</span>${isOrg?'⬇️':'🎯'}</button>
+      <button class="pctrl kk" onclick="hostKick('${pid}')"><span class="pctrl-tip">Remove</span>✕</button>
+    </div>`;
+  }
+  return `<div class="plist-avatar">${initials}${micLk||camLk?'<div class="locked-ov">🔒</div>':''}</div>
+    <div class="plist-info">
+      <div class="plist-name">${esc(name)}${isMe?' (You)':''}</div>
+      <div class="plist-role" id="role-${pid}">${isHost?'[Host] Host':(peerInfo[pid]&&peerInfo[pid].isOrganizer?'[Org] Organizer':'Participant')}${micLk||camLk?' <span class="lock-label">🔒</span>':''}</div>
+      <div class="plist-state"><span class="si${mic?'':' off'}${micLk?' locked':''}" id="pli-mic-${pid}">${mic?'🎤':'🔇'}</span><span class="si${cam?'':' off'}${camLk?' locked':''}" id="pli-cam-${pid}">${cam?'📷':'🚫'}</span></div>
+    </div>${controls}`;
+}
+
+function addPlistItem(pid,name,isHost,isMe,mic,cam,micLk,camLk){
+  const list=document.getElementById('plist');
+  const div=document.createElement('div');
+  div.className='plist-item';div.id='pli-'+pid;
+  div.innerHTML=plistHTML(pid,name,isHost,isMe,mic,cam,micLk,camLk);
+  if(isHost||isMe)list.prepend(div);
+  else list.appendChild(div);
+}
+
+function removePlistItem(pid){const el=document.getElementById('pli-'+pid);if(el)el.remove();}
+function updateLocalRole(){const el=document.getElementById('pli-local');if(el){const r=el.querySelector('.plist-role');if(r)r.innerHTML=amHost?'[Host] Host':(amOrganizer?'[Org] Organizer':'Participant');}}
+
+function refreshPlistItem(pid){
+  const el=document.getElementById('pli-'+pid);if(!el)return;
+  const info=peerInfo[pid];if(!info)return;
+  el.innerHTML=plistHTML(pid,info.name,info.isHost,false,info.micOn,info.camOn,info.micLocked,info.camLocked);
+}
+
+function applyPeerState(id,mic,cam,micLk,camLk){
+  if(!peerInfo[id])return;
+  peerInfo[id].micOn=mic;peerInfo[id].camOn=cam;peerInfo[id].micLocked=micLk;peerInfo[id].camLocked=camLk;
+  const mp=document.getElementById('mic-pill-'+id);if(mp)mp.classList.toggle('show',!mic);
+  refreshPlistItem(id);
+}
+
+
+socket.on('peer-role-changed',({id,isOrganizer})=>{
+  if(peerInfo[id]){
+    peerInfo[id].isOrganizer=isOrganizer;
+    const tile=document.getElementById('tile-'+id);
+    if(tile){
+      tile.classList.toggle('org-tile',isOrganizer);
+      const lbl=tile.querySelector('.tile-label');
+      if(lbl){
+        const name=peerInfo[id].name;
+        const isHost=peerInfo[id].isHost;
+        lbl.innerHTML=(isHost?'[Host] ':(isOrganizer?'[Org] ':''))+esc(name);
+      }
+    }
+    refreshPlistItem(id);
+    toast(isOrganizer?'[Org] '+esc(peerInfo[id].name)+' is now an organizer':esc(peerInfo[id].name)+' is no longer an organizer');
+  }
+});
+
+
+socket.on('peer-role-changed',({id,isOrganizer})=>{
+  if(peerInfo[id]){
+    peerInfo[id].isOrganizer=isOrganizer;
+    const tile=document.getElementById('tile-'+id);
+    if(tile){
+      tile.classList.toggle('org-tile',isOrganizer);
+      const lbl=tile.querySelector('.tile-label');
+      if(lbl){
+        const name=peerInfo[id].name;
+        const isHost=peerInfo[id].isHost;
+        lbl.innerHTML=(isHost?'[Host] ':(isOrganizer?'[Org] ':''))+esc(name);
+      }
+    }
+    refreshPlistItem(id);
+    toast((isOrganizer?'[Org] '+esc(peerInfo[id].name)+' is now an organizer':'[Org] '+esc(peerInfo[id].name)+' is no longer an organizer'));
+  }
+});
+
+socket.on('peer-state',({id,micOn:m,camOn:c,micLocked:ml,camLocked:cl})=>applyPeerState(id,m,c,ml||false,cl||false));
+
+socket.on('force-mic',({micOn:state,locked})=>{
+  micLocked=locked;micOn=state;
+  ls.getAudioTracks().forEach(t=>t.enabled=micOn);
+  updateMyMicUI();
+  toast(locked?'🔒 Host locked your mic':(micOn?'🎤 Host unmuted you':'🔇 Host muted you'));
+  broadcastState();
+});
+socket.on('force-cam',({camOn:state,locked})=>{
+  camLocked=locked;camOn=state;
+  ls.getVideoTracks().forEach(t=>t.enabled=camOn);
+  updateMyCamUI();
+  toast(locked?'🔒 Host locked your camera':(camOn?'📷 Host turned on your camera':'🚫 Host turned off your camera'));
+  broadcastState();
+});
+socket.on('kicked',()=>{alert('You have been removed from the meeting.');location.reload();});
+
+function updateMyMicUI(){
+  const btn=document.getElementById('micbtn');
+  btn.innerHTML=micOn?'🎤':'🔇';
+  btn.className='ctrl'+(micLocked?' locked-ctrl':(micOn?'':' off'));
+  document.getElementById('lmic-pill').classList.toggle('show',!micOn);
+}
+function updateMyCamUI(){
+  const btn=document.getElementById('cambtn');
+  btn.innerHTML=camOn?'📷':'🚫';
+  btn.className='ctrl'+(camLocked?' locked-ctrl':(camOn?'':' off'));
+  const lv=document.getElementById('lv');if(lv)lv.style.visibility=camOn?'visible':'hidden';
+}
+
+// ── HOST CONTROLS ──
+function hostToggleMic(pid){socket.emit('host-toggle-mic',{targetId:pid});}
+function hostToggleCam(pid){socket.emit('host-toggle-cam',{targetId:pid});}
+function hostLockMic(pid){socket.emit('host-lock-mic',{targetId:pid});}
+function hostLockCam(pid){socket.emit('host-lock-cam',{targetId:pid});}
+function hostKick(pid){if(confirm('Remove '+esc(peerInfo[pid]?.name||'this participant')+'?'))socket.emit('host-kick',{targetId:pid});}
+
+// ── MY CONTROLS ──
+function tryToggleMic(){
+  if(micLocked){toast('🔒 Your mic is locked by the host');return;}
+  micOn=!micOn;ls.getAudioTracks().forEach(t=>t.enabled=micOn);
+  updateMyMicUI();toast(micOn?'Mic on':'Mic muted');broadcastState();
+}
+function tryToggleCam(){
+  if(camLocked){toast('🔒 Your camera is locked by the host');return;}
+  camOn=!camOn;ls.getVideoTracks().forEach(t=>t.enabled=camOn);
+  updateMyCamUI();toast(camOn?'Camera on':'Camera off');broadcastState();
+}
+async function toggleScreen(){
+  if(!amHost&&!amOrganizer){toast('🚫 Only the host or organizer can share screen');return;}
+  const btn=document.getElementById('screenbtn');
+  if(!screenSharing){try{screenStream=await navigator.mediaDevices.getDisplayMedia({video:true});const track=screenStream.getVideoTracks()[0];Object.values(peers).forEach(pc=>{const s=pc.getSenders().find(s=>s.track&&s.track.kind==='video');if(s)s.replaceTrack(track);});const lv=document.getElementById('lv');if(lv)lv.srcObject=screenStream;screenSharing=true;btn.classList.add('active');toast('💻 Screen sharing');track.onended=()=>stopScreen();}catch(e){toast('Cancelled');}}else stopScreen();
+}
+function stopScreen(){if(screenStream){screenStream.getTracks().forEach(t=>t.stop());screenStream=null;}Object.values(peers).forEach(pc=>{const s=pc.getSenders().find(s=>s.track&&s.track.kind==='video');if(s&&ls)s.replaceTrack(ls.getVideoTracks()[0]);});const lv=document.getElementById('lv');if(lv)lv.srcObject=ls;screenSharing=false;document.getElementById('screenbtn').classList.remove('active');}
+function toggleSide(){sideOpen=!sideOpen;document.getElementById('side-panel').classList.toggle('open',sideOpen);document.getElementById('sidebtn').classList.toggle('active',sideOpen);if(sideOpen&&activeTab==='c'){unreadChat=0;document.getElementById('notif-dot').style.display='none';}}
+function switchTab(t){activeTab=t;document.getElementById('tab-p').classList.toggle('active',t==='p');document.getElementById('tab-c').classList.toggle('active',t==='c');document.getElementById('pane-p').classList.toggle('active',t==='p');document.getElementById('pane-c').classList.toggle('active',t==='c');if(t==='c'){unreadChat=0;document.getElementById('notif-dot').style.display='none';setTimeout(()=>document.getElementById('chat-in').focus(),100);}}
+function sendChat(){const input=document.getElementById('chat-in');const msg=input.value.trim();if(!msg)return;socket.emit('chat-message',{roomId:rid,message:msg,sender:myName});addMsg(msg,myName+' (You)',true);input.value='';}
+function addMsg(msg,sender,isMe){const c=document.getElementById('chat-msgs');const d=document.createElement('div');d.className='msg '+(isMe?'me':'them');d.innerHTML='<div class="msg-name">'+esc(sender)+'</div><div class="bubble">'+esc(msg)+'</div>';c.appendChild(d);c.scrollTop=c.scrollHeight;}
+function addSys(msg){const c=document.getElementById('chat-msgs');const d=document.createElement('div');d.className='sys-msg';d.textContent=msg;c.appendChild(d);c.scrollTop=c.scrollHeight;}
+
+// ── WebRTC ──
+async function mkpc(pid,name,isHost,initiator){
+  const pc=new RTCPeerConnection(ice);peers[pid]=pc;
+  ls.getTracks().forEach(t=>pc.addTrack(t,ls));
+  pc.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{to:pid,candidate:e.candidate});};
+  pc.ontrack=e=>{setRemoteVideo(pid,e.streams[0],name,isHost);addRemoteAnalyser(pid,e.streams[0]);};
+  pc.onconnectionstatechange=()=>{if(pc.connectionState==='connected'){playSound('join');toast('🎉 '+esc(name)+' joined!');if(!timerInterval)startTimer();}};
+  if(initiator){const o=await pc.createOffer();await pc.setLocalDescription(o);socket.emit('offer',{to:pid,offer:o});}
+  return pc;
+}
+
+socket.on('existing-peers',async(list)=>{for(const {id,name,isHost,micOn:m,camOn:c,micLocked:ml,camLocked:cl} of list){addRemoteTile(id,name,isHost,m,c,ml||false,cl||false);await mkpc(id,name,isHost,true);}if(list.length>0&&!timerInterval)startTimer();});
+socket.on('peer-joined',async({id,name,isHost})=>{addRemoteTile(id,name,isHost,true,true,false,false);await mkpc(id,name,isHost,false);addSys(esc(name)+' joined');});
+socket.on('offer',async({from,offer,name,isHost})=>{if(!peers[from])await mkpc(from,name||'Guest',isHost||false,false);await peers[from].setRemoteDescription(new RTCSessionDescription(offer));const a=await peers[from].createAnswer();await peers[from].setLocalDescription(a);socket.emit('answer',{to:from,answer:a});});
+socket.on('answer',async({from,answer})=>{if(peers[from])await peers[from].setRemoteDescription(new RTCSessionDescription(answer));});
+socket.on('ice-candidate',async({from,candidate})=>{if(peers[from])try{await peers[from].addIceCandidate(new RTCIceCandidate(candidate));}catch(e){}});
+socket.on('peer-left',({id,name})=>{playSound('leave');toast(esc(name)+' left',3000);addSys(esc(name)+' left');if(peers[id]){peers[id].close();delete peers[id];}removeRemoteAnalyser(id);removeTile(id);});
+socket.on('chat-message',({message,sender})=>{addMsg(message,sender,false);playSound('chat');if(activeTab!=='c'||!sideOpen){unreadChat++;const nd=document.getElementById('notif-dot');nd.textContent=unreadChat;nd.style.display='flex';}if(!sideOpen)toast('💬 '+esc(sender)+': '+esc(message),3000);});
+
+
+
+
+
+
+
+// ── MEETING TIMER ──
+let timerInterval = null;
+let timerSeconds = 0;
+
+function startTimer() {
+  document.getElementById('meeting-timer').style.display = 'block';
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+    const s = String(timerSeconds % 60).padStart(2, '0');
+    document.getElementById('meeting-timer').textContent = m + ':' + s;
+  }, 1000);
+}
+
+// ── MUTE ALL ──
+function muteAll() {
+  if (!amHost) { toast('Only the host can mute all'); return; }
+  Object.keys(peerInfo).forEach(pid => {
+    socket.emit('host-toggle-mic', { targetId: pid });
+  });
+  toast('🔇 Muted everyone');
+}
+
+
+// ── SPEAKER DETECTION ──
+let audioCtxSpeaker = null;
+let localAnalyser = null;
+let speakingInterval = null;
+let remoteAnalysers = {};
+let isSpeaking = false;
+
+function startSpeakerDetection() {
+  try {
+    audioCtxSpeaker = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Local mic analyser
+    const localSource = audioCtxSpeaker.createMediaStreamSource(ls);
+    localAnalyser = audioCtxSpeaker.createAnalyser();
+    localAnalyser.fftSize = 512;
+    localAnalyser.smoothingTimeConstant = 0.3;
+    localSource.connect(localAnalyser);
+
+    speakingInterval = setInterval(checkSpeaking, 100);
+  } catch(e) { console.log('Speaker detection error:', e); }
+}
+
+function addRemoteAnalyser(pid, stream) {
+  try {
+    if (!audioCtxSpeaker) return;
+    const source = audioCtxSpeaker.createMediaStreamSource(stream);
+    const analyser = audioCtxSpeaker.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.3;
+    source.connect(analyser);
+    remoteAnalysers[pid] = analyser;
+  } catch(e) {}
+}
+
+function getVolume(analyser) {
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i];
+  return sum / data.length;
+}
+
+function checkSpeaking() {
+  // Check local — only if mic is on
+  if (localAnalyser) {
+    const vol = getVolume(localAnalyser);
+    const speaking = micOn && vol > 35;
+    const tile = document.getElementById('tile-local');
+    if (tile) tile.classList.toggle('speaking', speaking);
+  }
+
+  // Check remote peers — only if their mic is on
+  Object.keys(remoteAnalysers).forEach(pid => {
+    const analyser = remoteAnalysers[pid];
+    if (!analyser) return;
+    const vol = getVolume(analyser);
+    const info = peerInfo[pid];
+    const speaking = info && info.micOn && vol > 35;
+    const tile = document.getElementById('tile-' + pid);
+    if (tile) tile.classList.toggle('speaking', speaking);
+  });
+}
+
+function removeRemoteAnalyser(pid) {
+  if (remoteAnalysers[pid]) {
+    try { remoteAnalysers[pid].disconnect(); } catch(e) {}
+    delete remoteAnalysers[pid];
+  }
+}
+
+function stopSpeakerDetection() {
+  if (speakingInterval) { clearInterval(speakingInterval); speakingInterval = null; }
+  if (audioCtxSpeaker) { try { audioCtxSpeaker.close(); } catch(e) {} audioCtxSpeaker = null; }
+  remoteAnalysers = {};
+  localAnalyser = null;
+}
+
+
+function promoteOrganizer(pid){
+  socket.emit('promote-organizer',{targetId:pid});
+  if(peerInfo[pid])peerInfo[pid].isOrganizer=true;
+  refreshPlistItem(pid);
+  toast('[Org] '+esc(peerInfo[pid]?.name||'Participant')+' is now an organizer');
+}
+function demoteOrganizer(pid){
+  socket.emit('demote-organizer',{targetId:pid});
+  if(peerInfo[pid])peerInfo[pid].isOrganizer=false;
+  refreshPlistItem(pid);
+  toast(esc(peerInfo[pid]?.name||'Participant')+' is no longer an organizer');
+}
+
+function promoteOrganizer(pid){
+  socket.emit('promote-organizer',{targetId:pid});
+  if(peerInfo[pid])peerInfo[pid].isOrganizer=true;
+  refreshPlistItem(pid);
+  toast('[Org] '+esc(peerInfo[pid]?.name||'Participant')+' is now an organizer');
+}
+function demoteOrganizer(pid){
+  socket.emit('demote-organizer',{targetId:pid});
+  if(peerInfo[pid])peerInfo[pid].isOrganizer=false;
+  refreshPlistItem(pid);
+  toast(esc(peerInfo[pid]?.name||'Participant')+' is no longer an organizer');
+}
+function endCall(){if(timerInterval){clearInterval(timerInterval);timerInterval=null;}stopSpeakerDetection();Object.values(peers).forEach(pc=>pc.close());if(ls)ls.getTracks().forEach(t=>t.stop());if(screenStream)screenStream.getTracks().forEach(t=>t.stop());location.reload();}
+window.addEventListener('load',()=>{const p=new URLSearchParams(window.location.search).get('room');if(p){document.getElementById('ji').value=p;setstatus('Room found - click Join');}});
+document.addEventListener('click',e=>{if(reactionsOpen&&!e.target.closest('#reaction-bar')&&!e.target.closest('#reactbtn'))toggleReactions();});
+</script>
+</body>
+</html>
